@@ -85,14 +85,46 @@ const FoldersSection = styled.div`
   overflow-y: auto;
 `;
 
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #e2e8f0;
+`;
+
 const SectionTitle = styled.h3`
   font-size: 1.4rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0;
-  padding-bottom: 16px;
-  border-bottom: 3px solid #e2e8f0;
   letter-spacing: -0.025em;
+`;
+
+const HeaderRefreshButton = styled.button`
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover:not(:disabled) {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #334155;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
 const FoldersList = styled.div`
@@ -189,36 +221,6 @@ const DocumentCount = styled.span`
   border: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
-const FolderActions = styled.div`
-  display: flex;
-  gap: 12px;
-  margin-top: 12px;
-`;
-
-const ActionButton = styled.button`
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  color: #667eea;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 1rem;
-  min-width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-
-  &:hover {
-    background: #667eea;
-    color: white;
-    border-color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-  }
-`;
 
 const LoadingMessage = styled.div`
   text-align: center;
@@ -418,11 +420,6 @@ function PolicyPanel({ selectedFolder, onFolderSelect }) {
     }
   };
 
-  const handleUploadToFolder = (e, folder) => {
-    e.stopPropagation();
-    // TODO: Implement file upload to specific folder
-    console.log('Upload to folder:', folder.name);
-  };
 
   if (loading) {
     return (
@@ -444,7 +441,13 @@ function PolicyPanel({ selectedFolder, onFolderSelect }) {
       {error && <ErrorMessage>{error}</ErrorMessage>}
 
       <FoldersSection>
-        <SectionTitle>Policy Categories</SectionTitle>
+        <SectionHeader>
+          <SectionTitle>Policy Categories</SectionTitle>
+          <HeaderRefreshButton onClick={handleRefresh} disabled={loading}>
+            <span>🔄</span>
+            <span>Refresh</span>
+          </HeaderRefreshButton>
+        </SectionHeader>
         {folders.length === 0 ? (
           <EmptyState>No policy categories found. Add your first policy to get started.</EmptyState>
         ) : (
@@ -463,20 +466,6 @@ function PolicyPanel({ selectedFolder, onFolderSelect }) {
                     <DocumentCount>{folder.document_count || 0} documents</DocumentCount>
                   </FolderDetails>
                 </FolderInfo>
-                <FolderActions>
-                  <ActionButton 
-                    onClick={(e) => handleUploadToFolder(e, folder)} 
-                    title="Upload files to this folder"
-                  >
-                    📤
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={handleRefresh} 
-                    title="Refresh folder"
-                  >
-                    🔄
-                  </ActionButton>
-                </FolderActions>
               </FolderItem>
             ))}
           </FoldersList>
