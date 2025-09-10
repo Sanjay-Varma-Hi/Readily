@@ -252,6 +252,19 @@ class MockCollection:
     def __init__(self, error_message):
         self.error_message = error_message
     
+    def sort(self, *args, **kwargs):
+        """Return self to allow chaining, but operations will fail"""
+        return self
+    
+    def __aiter__(self):
+        """Make it async iterable - return empty async generator"""
+        return self._async_generator()
+    
+    async def _async_generator(self):
+        """Empty async generator that yields nothing"""
+        if False:  # This ensures it's a generator but never yields
+            yield
+    
     async def find(self, *args, **kwargs):
         raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
     
