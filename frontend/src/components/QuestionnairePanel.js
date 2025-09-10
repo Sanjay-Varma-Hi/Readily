@@ -917,15 +917,17 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
         </AnswerHeader>
         
         <AnswerContent>
-          <AnswerSection>
-            <AnswerLabel>Evidence</AnswerLabel>
-            <EvidenceText>
-              {answer.evidence ? 
-                `${answer.evidence.filename} (Page ${answer.evidence.page || answer.page_number || 1})` : 
-                'None found'
-              }
-            </EvidenceText>
-          </AnswerSection>
+          {answer.answer === 'YES' && (
+            <AnswerSection>
+              <AnswerLabel>Evidence</AnswerLabel>
+              <EvidenceText>
+                {answer.evidence ? 
+                  `${answer.evidence.filename} (Page ${answer.evidence.page || answer.page_number || 1})` : 
+                  'None found'
+                }
+              </EvidenceText>
+            </AnswerSection>
+          )}
           
           {answer.reasoning && (
             <AnswerSection>
@@ -936,7 +938,7 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
             </AnswerSection>
           )}
           
-          {(answer.quote || (answer.evidence && answer.evidence.quote)) && (
+          {answer.answer === 'YES' && (answer.quote || (answer.evidence && answer.evidence.quote)) && (
             <AnswerSection>
               <AnswerLabel>Quote</AnswerLabel>
               <QuoteText style={{ fontStyle: 'italic', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
