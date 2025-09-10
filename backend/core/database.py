@@ -55,37 +55,24 @@ class Database:
                 logger.info(f"🔗 MongoDB URI format: {mongodb_uri[:20]}...")
             
             # Create fresh client with proper Atlas SRV URI format
-            # Add SSL/TLS configuration for production compatibility
-            connection_kwargs = {
-                'serverSelectionTimeoutMS': 15000,  # Increased timeout for production
-                'connectTimeoutMS': 15000,
-                'socketTimeoutMS': 15000,
+            # Use only valid MongoDB driver options
+            self.client = AsyncIOMotorClient(
+                mongodb_uri,
+                serverSelectionTimeoutMS=15000,  # Increased timeout for production
+                connectTimeoutMS=15000,
+                socketTimeoutMS=15000,
                 # SSL/TLS configuration for production compatibility
-                'tls': True,
-                'tlsAllowInvalidCertificates': False,
-                'tlsAllowInvalidHostnames': False,
+                tls=True,
+                tlsAllowInvalidCertificates=False,
+                tlsAllowInvalidHostnames=False,
                 # Retry configuration
-                'retryWrites': True,
-                'retryReads': True,
+                retryWrites=True,
+                retryReads=True,
                 # Connection pool settings
-                'maxPoolSize': 10,
-                'minPoolSize': 1,
-                'maxIdleTimeMS': 30000,
-                # Additional options for Render compatibility
-                'directConnection': False,  # Use replica set discovery
-                'heartbeatFrequencyMS': 10000,  # Heartbeat frequency
-                'serverSelectionRetryDelayMS': 2000,  # Retry delay
-            }
-            
-            # Add production-specific options
-            if is_production:
-                connection_kwargs.update({
-                    'tlsInsecure': False,  # Don't allow insecure connections
-                    'tlsCAFile': None,  # Use system CA bundle
-                    'tlsCertificateKeyFile': None,  # No client certificate
-                })
-            
-            self.client = AsyncIOMotorClient(mongodb_uri, **connection_kwargs)
+                maxPoolSize=10,
+                minPoolSize=1,
+                maxIdleTimeMS=30000
+            )
             # Get database - use default database from URI or specified db_name
             default_db = self.client.get_default_database()
             self.db = default_db if default_db is not None else self.client[db_name]
