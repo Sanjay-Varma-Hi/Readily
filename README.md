@@ -67,7 +67,7 @@ A comprehensive policy document analysis system that uses DeepSeek for intellige
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Sanjay-Varma-Hi/Readily.git
 cd Readily
 
 # Install backend dependencies
@@ -221,4 +221,3 @@ For support and questions:
 - Create an issue in the repository
 - Check the API documentation at `/docs`
 - Review the environment configuration in `/env/example.env`
-
