@@ -29,7 +29,14 @@ class Database:
             logger.info(f"📊 Database: {db_name}")
             
             # Create fresh client every time with exact same parameters
-            self.client = AsyncIOMotorClient(mongodb_uri)
+            # Add SSL configuration for Render compatibility
+            self.client = AsyncIOMotorClient(
+                mongodb_uri,
+                tls=True,
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000
+            )
             self.db = self.client[db_name]
             
             # Test connection
