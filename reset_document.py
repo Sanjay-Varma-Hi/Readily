@@ -3,11 +3,22 @@ import asyncio
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv("env/example.env")
 
 async def reset_document():
+    # Get MongoDB connection details from environment variables
+    mongodb_uri = os.getenv("MONGODB_URI")
+    db_name = os.getenv("DB_NAME", "policiesdb")
+    
+    if not mongodb_uri:
+        raise ValueError("MONGODB_URI environment variable is not set")
+    
     # Connect to MongoDB
-    client = AsyncIOMotorClient("mongodb+srv://sankarsanjayvarmathotakura:Sanju123@cluster0.6qj8h.mongodb.net/")
-    db = client.policiesdb
+    client = AsyncIOMotorClient(mongodb_uri)
+    db = client[db_name]
     
     # Document ID from the image
     doc_id = "68c05bf860c12c1fabcb3ccd"

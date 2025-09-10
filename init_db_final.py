@@ -7,13 +7,20 @@ This script will create the database schema and indexes in MongoDB Atlas
 import os
 import sys
 from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv("env/example.env")
 
 def init_database():
     """Initialize the database with collections and indexes"""
     try:
-        # MongoDB Atlas connection string
-        mongodb_uri = "mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.net/?retryWrites=true&w=majority&appName=Cluster01"
-        db_name = "policiesdb"
+        # Get MongoDB connection details from environment variables
+        mongodb_uri = os.getenv("MONGODB_URI")
+        db_name = os.getenv("DB_NAME", "policiesdb")
+        
+        if not mongodb_uri:
+            raise ValueError("MONGODB_URI environment variable is not set")
         
         print(f"🔗 Connecting to MongoDB Atlas...")
         print(f"Database: {db_name}")

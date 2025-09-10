@@ -18,9 +18,12 @@ class Database:
     async def connect(self):
         """Connect to MongoDB - NO CACHING, FRESH CONNECTION EVERY TIME"""
         try:
-            # Use EXACT same URI as API (hardcoded to ensure consistency)
-            mongodb_uri = "mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.net/?retryWrites=true&w=majority&appName=Cluster01"
-            db_name = "policiesdb"
+            # Get MongoDB URI from environment variables
+            mongodb_uri = os.getenv("MONGODB_URI")
+            db_name = os.getenv("DB_NAME", "policiesdb")
+            
+            if not mongodb_uri:
+                raise ValueError("MONGODB_URI environment variable is not set")
             
             logger.info(f"🔗 Connecting to MongoDB: {mongodb_uri}")
             logger.info(f"📊 Database: {db_name}")
