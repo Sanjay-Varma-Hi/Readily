@@ -8,6 +8,11 @@ To fix the MongoDB connection issue on Render, you need to set the following env
    ```
    mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.net/?retryWrites=true&w=majority&appName=Cluster01&tls=true&tlsAllowInvalidCertificates=false
    ```
+   
+   **Alternative (if still having issues):**
+   ```
+   mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.net/policiesdb?retryWrites=true&w=majority&appName=Cluster01&ssl=true&authSource=admin
+   ```
 
 2. **DB_NAME**
    ```

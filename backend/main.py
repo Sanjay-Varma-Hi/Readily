@@ -2,7 +2,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import logging
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 from api import policies, questionnaires, answers, summaries, chunking, audit_answers
 
@@ -27,9 +30,10 @@ app.add_middleware(
         "http://localhost:3000",  # React dev server
         "https://readily-kappa.vercel.app",  # Vercel frontend
         "https://readily.vercel.app",  # Alternative Vercel domain
+        "https://readily-mgtk.onrender.com",  # Render backend (for self-referencing)
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -76,6 +80,7 @@ async def database_health_check():
             "ping": result
         }
     except Exception as e:
+        logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
             "database": "disconnected",

@@ -2,6 +2,7 @@ import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import IndexModel, ASCENDING, DESCENDING
+from fastapi import HTTPException
 from core.schema import Document, Embedding, Questionnaire, Answer, Snapshot, PolicyFolder, UploadedDocument
 import logging
 from dotenv import load_dotenv
@@ -40,8 +41,7 @@ class Database:
             self.client = AsyncIOMotorClient(
                 mongodb_uri,
                 tls=True,
-                tlsAllowInvalidCertificates=False,  # Changed to False for better security
-                tlsInsecure=False,  # Ensure secure connections
+                tlsAllowInvalidCertificates=False,  # Use only this option, not tlsInsecure
                 serverSelectionTimeoutMS=15000,  # Increased timeout for Render
                 connectTimeoutMS=15000,  # Increased timeout for Render
                 socketTimeoutMS=15000,  # Added socket timeout
@@ -227,9 +227,51 @@ class Database:
 # NO GLOBAL INSTANCE - CREATE FRESH EVERY TIME
 async def get_database():
     """Get fresh database instance - NO CACHING"""
-    db = Database()
-    await db.connect()
-    return db
+    try:
+        db = Database()
+        await db.connect()
+        return db
+    except Exception as e:
+        logger.error(f"Failed to get database connection: {e}")
+        # Return a mock database object that will handle errors gracefully
+        return MockDatabase(str(e))
+
+class MockDatabase:
+    """Mock database for when connection fails"""
+    def __init__(self, error_message):
+        self.error_message = error_message
+        self._mock_collections = {}
+    
+    def __getattr__(self, name):
+        if name in ['documents', 'questionnaires', 'answers', 'policy_folders', 'embeddings', 'snapshots', 'chunks', 'audit_questions']:
+            return MockCollection(self.error_message)
+        return super().__getattribute__(name)
+
+class MockCollection:
+    """Mock collection for when database connection fails"""
+    def __init__(self, error_message):
+        self.error_message = error_message
+    
+    async def find(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def find_one(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def insert_one(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def update_one(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def delete_one(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def delete_many(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def create_indexes(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
 
 async def init_db():
     """Initialize database connection - NO CACHING"""
