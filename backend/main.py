@@ -84,13 +84,12 @@ async def head_health():
 async def database_health_check():
     """Check database connection - returns 500 if DB ping fails"""
     try:
-        from core.database import Database
-        db = Database()
-        await db.connect()
+        from core.database import get_database
+        db = await get_database()
         
-        # Test a simple query
+        # Test both client and database
         await db.client.admin.command("ping")
-        await db.disconnect()
+        await db.db.command("ping")
         
         return {"ok": True}
     except Exception as e:

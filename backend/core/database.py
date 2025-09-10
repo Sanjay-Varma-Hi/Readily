@@ -222,9 +222,38 @@ class Database:
 async def get_database():
     """Get fresh database instance - NO CACHING"""
     try:
-        db = Database()
-        await db.connect()
-        return db
+        from motor.motor_asyncio import AsyncIOMotorClient
+        MONGODB_URI = os.getenv("MONGODB_URI")
+        DB_NAME = os.getenv("DB_NAME", "policiesdb")
+        
+        if not MONGODB_URI:
+            raise ValueError("MONGODB_URI environment variable is not set")
+        
+        client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        db = client[DB_NAME] if DB_NAME else (client.get_default_database() or client["readily"])
+        
+        # Test connection
+        await client.admin.command("ping")
+        
+        # Create a simple database wrapper
+        class DatabaseWrapper:
+            def __init__(self, client, db):
+                self.client = client
+                self.db = db
+                self.documents = db.documents
+                self.questionnaires = db.questionnaires
+                self.answers = db.answers
+                self.policy_folders = db.policy_folders
+                self.embeddings = db.embeddings
+                self.snapshots = db.snapshots
+                self.chunks = db.chunks
+                self.audit_questions = db.audit_questions
+            
+            def __bool__(self):
+                """Prevent boolean evaluation of database objects"""
+                return True
+        
+        return DatabaseWrapper(client, db)
     except Exception as e:
         logger.error(f"Failed to get database connection: {e}")
         # Return a mock database object that will handle errors gracefully
@@ -235,6 +264,10 @@ class MockDatabase:
     def __init__(self, error_message):
         self.error_message = error_message
         self._mock_collections = {}
+    
+    def __bool__(self):
+        """Prevent boolean evaluation of database objects"""
+        return True
     
     def __getattr__(self, name):
         if name in ['documents', 'questionnaires', 'answers', 'policy_folders', 'embeddings', 'snapshots', 'chunks', 'audit_questions']:
