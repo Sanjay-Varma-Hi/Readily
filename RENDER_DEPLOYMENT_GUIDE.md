@@ -31,7 +31,7 @@ This guide addresses the 502 Bad Gateway error and MongoDB SSL issues on Render.
 ## 🚀 Render Configuration
 
 ### Build Command
-Set this in your Render service settings:
+Set this in your Render settings:
 ```bash
 pip install --upgrade pip && pip install -r backend/requirements.txt
 ```
