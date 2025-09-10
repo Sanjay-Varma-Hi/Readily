@@ -929,14 +929,6 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
             </AnswerSection>
           )}
           
-          {answer.reasoning && (
-            <AnswerSection>
-              <AnswerLabel>Reasoning</AnswerLabel>
-              <QuoteText>
-                {answer.reasoning}
-              </QuoteText>
-            </AnswerSection>
-          )}
           
           {answer.answer === 'YES' && (answer.quote || (answer.evidence && answer.evidence.quote)) && (
             <AnswerSection>
