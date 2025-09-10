@@ -36,15 +36,11 @@ Set this in your Render settings:
 pip install --upgrade pip && pip install -r backend/requirements.txt
 ```
 
-### Python Version (CRITICAL - Fixes SSL Issues)
-**Method 1: Environment Variable (Recommended)**
-Set this environment variable in Render:
-```
-PYTHON_VERSION=3.11.9
-```
-
-**Method 2: Runtime File (Automatic)**
-The `runtime.txt` file in the root directory will automatically force Python 3.11.9
+### Python Version
+**Using Python 3.13 (Default)**
+- Render uses Python 3.13.4 by default
+- Our code is now optimized for Python 3.13 compatibility
+- SSL configuration has been updated for Python 3.13
 
 ### Required Environment Variables
 ```
@@ -52,6 +48,8 @@ MONGODB_URI=mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.n
 DB_NAME=policiesdb
 RENDER=true
 ```
+
+**⚠️ IMPORTANT**: Make sure the cluster name is `inf1rib` (with "1"), not `infirib` (with "i")
 
 ### Optional Variables
 ```
