@@ -53,6 +53,30 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/health/db")
+async def database_health_check():
+    """Check database connection"""
+    try:
+        from core.database import Database
+        db = Database()
+        await db.connect()
+        
+        # Test a simple query
+        result = await db.db.command("ping")
+        await db.disconnect()
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "ping": result
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
