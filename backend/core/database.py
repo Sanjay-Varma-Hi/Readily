@@ -283,6 +283,16 @@ class MockCollection:
         """Return self to allow chaining, but operations will fail"""
         return self
     
+    def limit(self, *args, **kwargs):
+        """Return self to allow chaining, but operations will fail"""
+        return self
+    
+    def to_list(self, *args, **kwargs):
+        """Return empty list for async operations"""
+        async def _to_list():
+            return []
+        return _to_list()
+    
     def __aiter__(self):
         """Make it async iterable - return empty async generator"""
         return self._async_generator()
@@ -311,6 +321,9 @@ class MockCollection:
         raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
     
     async def create_indexes(self, *args, **kwargs):
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
+    
+    async def replace_one(self, *args, **kwargs):
         raise HTTPException(status_code=503, detail=f"Database connection failed: {self.error_message}")
 
 async def init_db():
