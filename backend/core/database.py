@@ -1,4 +1,5 @@
 import os
+import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import IndexModel, ASCENDING, DESCENDING
 from core.schema import Document, Embedding, Questionnaire, Answer, Snapshot, PolicyFolder, UploadedDocument
@@ -6,7 +7,12 @@ import logging
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv("../env/example.env")
+# Try to load from local env file first, then fall back to system env vars
+if os.path.exists("../env/example.env"):
+    load_dotenv("../env/example.env")
+else:
+    # In production (Render), environment variables are set directly
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +31,8 @@ class Database:
             if not mongodb_uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
             
-            logger.info(f"🔗 Connecting to MongoDB: {mongodb_uri}")
+            # Log connection attempt (without exposing credentials)
+            logger.info(f"🔗 Connecting to MongoDB...")
             logger.info(f"📊 Database: {db_name}")
             
             # Create fresh client every time with exact same parameters
@@ -33,15 +40,34 @@ class Database:
             self.client = AsyncIOMotorClient(
                 mongodb_uri,
                 tls=True,
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=5000
+                tlsAllowInvalidCertificates=False,  # Changed to False for better security
+                tlsInsecure=False,  # Ensure secure connections
+                serverSelectionTimeoutMS=15000,  # Increased timeout for Render
+                connectTimeoutMS=15000,  # Increased timeout for Render
+                socketTimeoutMS=15000,  # Added socket timeout
+                retryWrites=True,
+                retryReads=True,
+                maxPoolSize=10,  # Connection pool size
+                minPoolSize=1,   # Minimum connections
+                maxIdleTimeMS=30000,  # Close idle connections after 30s
+                waitQueueTimeoutMS=5000,  # Wait for connection from pool
+                heartbeatFrequencyMS=10000  # Heartbeat frequency
             )
             self.db = self.client[db_name]
             
-            # Test connection
-            await self.client.admin.command('ping')
-            logger.info(f"✅ Connected to MongoDB: {db_name}")
+            # Test connection with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    await self.client.admin.command('ping')
+                    logger.info(f"✅ Connected to MongoDB: {db_name}")
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"⚠️ Connection attempt {attempt + 1} failed, retrying... Error: {e}")
+                        await asyncio.sleep(2)  # Wait 2 seconds before retry
+                    else:
+                        raise e
             
             # Create indexes (skip if they already exist)
             try:

@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from api import policies, questionnaires, answers, summaries, chunking, audit_answers
 
 # Load environment variables
-load_dotenv("../env/example.env")
+# Try to load from local env file first, then fall back to system env vars
+if os.path.exists("../env/example.env"):
+    load_dotenv("../env/example.env")
+else:
+    # In production (Render), environment variables are set directly
+    pass
 
 app = FastAPI(
     title="READILY - Policy Document Analysis",
