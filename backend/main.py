@@ -62,6 +62,11 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.head("/")
+async def head_root():
+    """Handle HEAD requests for health checks"""
+    return {"message": "OK"}
+
 @app.get("/health/db")
 async def database_health_check():
     """Check database connection"""
@@ -89,4 +94,6 @@ async def database_health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use PORT environment variable for Render compatibility, fallback to 8000 for local development
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
