@@ -371,7 +371,7 @@ function PolicyPanel({ selectedFolder, onFolderSelect }) {
       setError(null);
 
       // Create a new policy folder in the database
-      const response = await fetch('http://localhost:8000/api/policies/folders', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://readily-mgtk.onrender.com'}/api/policies/folders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

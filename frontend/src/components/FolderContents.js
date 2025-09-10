@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { getFolderDocuments, deletePolicy } from '../services/api';
 
 const Container = styled.div`
   padding: 32px;
@@ -443,13 +444,7 @@ function FolderContents({ folder }) {
     try {
       console.log('🔄 Loading documents for folder:', folder.name);
       
-      const response = await fetch(`http://localhost:8000/api/policies/folders/${folder._id}/documents`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to load documents');
-      }
-      
-      const data = await response.json();
+      const data = await getFolderDocuments(folder._id);
       setDocuments(data || []);
       console.log('✅ Documents loaded for folder:', folder.name, data.length, 'documents');
       
@@ -471,7 +466,7 @@ function FolderContents({ folder }) {
     setStatusCheckInProgress(prev => new Set(prev).add(docId));
     
     try {
-      const response = await fetch(`http://localhost:8000/api/policies/${docId}/status`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://readily-mgtk.onrender.com'}/api/policies/${docId}/status`);
       if (response.ok) {
         const status = await response.json();
         setDocumentStatuses(prev => ({
@@ -508,13 +503,7 @@ function FolderContents({ folder }) {
     try {
       console.log('🔄 Refreshing documents for folder:', folder.name);
       
-      const response = await fetch(`http://localhost:8000/api/policies/folders/${folder._id}/documents`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to load documents');
-      }
-      
-      const data = await response.json();
+      const data = await getFolderDocuments(folder._id);
       setDocuments(data || []);
       console.log('✅ Documents loaded for folder:', folder.name, data.length, 'documents');
       
@@ -541,13 +530,7 @@ function FolderContents({ folder }) {
     try {
       console.log('🗑️ Deleting document:', docId);
       
-      const response = await fetch(`http://localhost:8000/api/policies/${docId}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete document');
-      }
+      await deletePolicy(docId);
       
       console.log('✅ Document deleted successfully');
       
@@ -677,7 +660,7 @@ function FolderContents({ folder }) {
     formData.append('version', '1.0');
     formData.append('effective_date', new Date().toISOString());
     
-    const response = await fetch(`http://localhost:8000/api/policies/folders/${folder._id}/documents`, {
+    const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://readily-mgtk.onrender.com'}/api/policies/folders/${folder._id}/documents`, {
       method: 'POST',
       body: formData
     });
@@ -711,7 +694,7 @@ function FolderContents({ folder }) {
       formData.append('effective_date', new Date().toISOString());
       
       // Upload file
-      const response = await fetch(`http://localhost:8000/api/policies/folders/${folder._id}/documents`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://readily-mgtk.onrender.com'}/api/policies/folders/${folder._id}/documents`, {
         method: 'POST',
         body: formData
       });
