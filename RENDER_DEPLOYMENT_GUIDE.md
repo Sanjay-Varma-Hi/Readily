@@ -36,11 +36,15 @@ Set this in your Render service settings:
 pip install --upgrade pip && pip install -r backend/requirements.txt
 ```
 
-### Python Version
+### Python Version (CRITICAL - Fixes SSL Issues)
+**Method 1: Environment Variable (Recommended)**
 Set this environment variable in Render:
 ```
-PYTHON_VERSION=3.11
+PYTHON_VERSION=3.11.9
 ```
+
+**Method 2: Runtime File (Automatic)**
+The `runtime.txt` file in the root directory will automatically force Python 3.11.9
 
 ### Required Environment Variables
 ```
