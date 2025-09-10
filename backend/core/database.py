@@ -40,8 +40,8 @@ class Database:
             logger.info(f"📊 Database: {db_name}")
             logger.info(f"🌍 Environment: {'Production' if is_production else 'Development'}")
             
-            # Create fresh client every time with environment-specific parameters
-            # Let connection string handle SSL configuration for better compatibility
+            # Create fresh client every time with Python 3.13 compatible parameters
+            # Use explicit SSL settings for Python 3.13 compatibility
             client_kwargs = {
                 "serverSelectionTimeoutMS": 20000 if is_production else 15000,
                 "connectTimeoutMS": 20000 if is_production else 15000,
@@ -55,11 +55,18 @@ class Database:
                 "heartbeatFrequencyMS": 10000
             }
             
-            # Add production-specific SSL settings if needed
+            # Python 3.13 specific SSL configuration
             if is_production:
-                # For production, let the connection string handle SSL completely
-                # No additional SSL parameters to avoid conflicts
-                pass
+                # For Python 3.13, use explicit SSL settings that work with MongoDB Atlas
+                client_kwargs.update({
+                    "tls": True,
+                    "tlsAllowInvalidCertificates": False,
+                    "tlsInsecure": False,
+                    "ssl": True,
+                    "ssl_cert_reqs": "CERT_REQUIRED",
+                    "ssl_ca_certs": None,  # Use system CA certificates
+                    "ssl_match_hostname": True
+                })
             
             self.client = AsyncIOMotorClient(mongodb_uri, **client_kwargs)
             self.db = self.client[db_name]
