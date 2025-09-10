@@ -28,11 +28,21 @@ This guide addresses the 502 Bad Gateway error and MongoDB SSL issues on Render.
 - **Problem**: Unpinned versions causing compatibility issues
 - **Solution**: Pinned all package versions for stability
 
-## 🚀 Render Environment Variables
+## 🚀 Render Configuration
 
-Set these in your Render dashboard:
+### Build Command
+Set this in your Render service settings:
+```bash
+pip install --upgrade pip && pip install -r backend/requirements.txt
+```
 
-### Required Variables
+### Python Version
+Set this environment variable in Render:
+```
+PYTHON_VERSION=3.11
+```
+
+### Required Environment Variables
 ```
 MONGODB_URI=mongodb+srv://sanjayvarmacol2:Sanjay1234@cluster01.inf1rib.mongodb.net/policiesdb?retryWrites=true&w=majority&appName=Cluster01
 DB_NAME=policiesdb

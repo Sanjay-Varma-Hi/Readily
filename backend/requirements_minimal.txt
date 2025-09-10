@@ -1,0 +1,17 @@
+# Minimal requirements for Python 3.13 compatibility on Render
+fastapi
+uvicorn[standard]
+pymongo
+motor
+python-multipart
+python-dotenv
+pydantic
+pydantic-settings
+PyPDF2
+python-docx
+numpy
+scikit-learn
+sentence-transformers
+httpx
+aiohttp
+aiofiles
