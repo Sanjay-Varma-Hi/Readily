@@ -76,19 +76,21 @@ async def list_questionnaires(
 ):
     """List all uploaded questionnaires"""
     try:
+        # Test database connection first
+        await db.client.admin.command("ping")
+        
         cursor = db.questionnaires.find().sort("uploaded_at", -1)
         questionnaires = []
         async for q in cursor:
             q["_id"] = str(q["_id"])
             questionnaires.append(q)
 
+        logger.info(f"✅ Successfully retrieved {len(questionnaires)} questionnaires")
         return questionnaires
 
     except Exception as e:
-        logger.error(f"Error listing questionnaires: {e}")
-        # Return empty list instead of throwing error
-        print(f"❌ MongoDB Error: {e}")
-        return []
+        logger.error(f"❌ Error listing questionnaires: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve questionnaires: {str(e)}")
 
 @router.get("/questionnaires/{questionnaire_id}", response_model=dict)
 async def get_questionnaire(

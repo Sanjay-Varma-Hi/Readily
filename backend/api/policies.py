@@ -168,6 +168,9 @@ async def list_policies(
 ):
     """List policy documents with optional filters"""
     try:
+        # Test database connection first
+        await db.client.admin.command("ping")
+        
         query = {}
         if status:
             query["status"] = status
@@ -182,16 +185,20 @@ async def list_policies(
             doc["_id"] = str(doc["_id"])
             documents.append(doc)
 
+        logger.info(f"✅ Successfully retrieved {len(documents)} policies")
         return documents
 
     except Exception as e:
-        logger.error(f"Error listing policies: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Error listing policies: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve policies: {str(e)}")
 
 @router.get("/policies/folders", response_model=List[dict])
 async def list_policy_folders(db = Depends(get_database)):
     """List all policy folders with document counts"""
     try:
+        # Test database connection first
+        await db.client.admin.command("ping")
+        
         folders = []
         # Only get folders that actually exist in the database
         cursor = db.policy_folders.find()
@@ -202,13 +209,12 @@ async def list_policy_folders(db = Depends(get_database)):
             folder["_id"] = str(folder["_id"])
             folders.append(folder)
 
+        logger.info(f"✅ Successfully retrieved {len(folders)} policy folders")
         return folders
 
     except Exception as e:
-        logger.error(f"Error listing policy folders: {e}")
-        # Return empty list instead of throwing error
-        print(f"❌ MongoDB Error: {e}")
-        return []
+        logger.error(f"❌ Error listing policy folders: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve policy folders: {str(e)}")
 
 @router.post("/policies/folders", response_model=dict)
 async def create_policy_folder(

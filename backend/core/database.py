@@ -218,44 +218,82 @@ class Database:
     def audit_questions(self):
         return self.db.audit_questions
 
-# NO GLOBAL INSTANCE - CREATE FRESH EVERY TIME
+# Global database instance with connection pooling
+_database_instance = None
+_client_instance = None
+
 async def get_database():
-    """Get fresh database instance - NO CACHING"""
+    """Get database instance with connection pooling and retry logic"""
+    global _database_instance, _client_instance
+    
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
+        # Return existing connection if healthy
+        if _database_instance and _client_instance:
+            try:
+                await _client_instance.admin.command("ping")
+                return _database_instance
+            except Exception:
+                # Connection is stale, recreate
+                logger.warning("Database connection stale, recreating...")
+                _database_instance = None
+                _client_instance = None
+        
+        # Create new connection with retry logic
         MONGODB_URI = os.getenv("MONGODB_URI")
         DB_NAME = os.getenv("DB_NAME", "policiesdb")
         
         if not MONGODB_URI:
             raise ValueError("MONGODB_URI environment variable is not set")
         
-        client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-        db = client[DB_NAME] if DB_NAME else (client.get_default_database() or client["readily"])
-        
-        # Test connection
-        await client.admin.command("ping")
-        
-        # Create a simple database wrapper
-        class DatabaseWrapper:
-            def __init__(self, client, db):
-                self.client = client
-                self.db = db
-                self.documents = db.documents
-                self.questionnaires = db.questionnaires
-                self.answers = db.answers
-                self.policy_folders = db.policy_folders
-                self.embeddings = db.embeddings
-                self.snapshots = db.snapshots
-                self.chunks = db.chunks
-                self.audit_questions = db.audit_questions
-            
-            def __bool__(self):
-                """Prevent boolean evaluation of database objects"""
-                return True
-        
-        return DatabaseWrapper(client, db)
+        # Retry connection up to 3 times
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                _client_instance = AsyncIOMotorClient(
+                    MONGODB_URI, 
+                    serverSelectionTimeoutMS=10000,
+                    maxPoolSize=10,
+                    minPoolSize=1,
+                    maxIdleTimeMS=30000,
+                    retryWrites=True
+                )
+                
+                db = _client_instance[DB_NAME] if DB_NAME else (_client_instance.get_default_database() or _client_instance["readily"])
+                
+                # Test connection
+                await _client_instance.admin.command("ping")
+                
+                # Create database wrapper
+                class DatabaseWrapper:
+                    def __init__(self, client, db):
+                        self.client = client
+                        self.db = db
+                        self.documents = db.documents
+                        self.questionnaires = db.questionnaires
+                        self.answers = db.answers
+                        self.policy_folders = db.policy_folders
+                        self.embeddings = db.embeddings
+                        self.snapshots = db.snapshots
+                        self.chunks = db.chunks
+                        self.audit_questions = db.audit_questions
+                    
+                    def __bool__(self):
+                        """Prevent boolean evaluation of database objects"""
+                        return True
+                
+                _database_instance = DatabaseWrapper(_client_instance, db)
+                logger.info("✅ Database connection established successfully")
+                return _database_instance
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"⚠️ Database connection attempt {attempt + 1} failed, retrying... Error: {e}")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    raise e
+                    
     except Exception as e:
-        logger.error(f"Failed to get database connection: {e}")
+        logger.error(f"❌ Failed to get database connection after {max_retries} attempts: {e}")
         # Return a mock database object that will handle errors gracefully
         return MockDatabase(str(e))
 

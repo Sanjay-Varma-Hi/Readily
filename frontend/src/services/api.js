@@ -20,16 +20,36 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// Response interceptor with retry logic
 api.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Retry logic for network errors or 5xx errors
+    if (
+      (!error.response || error.response.status >= 500) &&
+      !originalRequest._retry &&
+      originalRequest._retryCount < 3
+    ) {
+      originalRequest._retry = true;
+      originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+      
+      console.log(`Retrying request (attempt ${originalRequest._retryCount})...`);
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, originalRequest._retryCount) * 1000));
+      
+      return api(originalRequest);
+    }
+    
     if (error.response?.status === 401) {
       // Handle unauthorized access
       console.error('Unauthorized access');
     }
+    
     return Promise.reject(error);
   }
 );
