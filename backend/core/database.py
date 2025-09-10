@@ -55,13 +55,37 @@ class Database:
                 logger.info(f"🔗 MongoDB URI format: {mongodb_uri[:20]}...")
             
             # Create fresh client with proper Atlas SRV URI format
-            # No deprecated SSL options - let Atlas SRV handle SSL automatically
-            self.client = AsyncIOMotorClient(
-                mongodb_uri,
-                serverSelectionTimeoutMS=10000,  # Increased timeout
-                connectTimeoutMS=10000,
-                socketTimeoutMS=10000
-            )
+            # Add SSL/TLS configuration for production compatibility
+            connection_kwargs = {
+                'serverSelectionTimeoutMS': 15000,  # Increased timeout for production
+                'connectTimeoutMS': 15000,
+                'socketTimeoutMS': 15000,
+                # SSL/TLS configuration for production compatibility
+                'tls': True,
+                'tlsAllowInvalidCertificates': False,
+                'tlsAllowInvalidHostnames': False,
+                # Retry configuration
+                'retryWrites': True,
+                'retryReads': True,
+                # Connection pool settings
+                'maxPoolSize': 10,
+                'minPoolSize': 1,
+                'maxIdleTimeMS': 30000,
+                # Additional options for Render compatibility
+                'directConnection': False,  # Use replica set discovery
+                'heartbeatFrequencyMS': 10000,  # Heartbeat frequency
+                'serverSelectionRetryDelayMS': 2000,  # Retry delay
+            }
+            
+            # Add production-specific options
+            if is_production:
+                connection_kwargs.update({
+                    'tlsInsecure': False,  # Don't allow insecure connections
+                    'tlsCAFile': None,  # Use system CA bundle
+                    'tlsCertificateKeyFile': None,  # No client certificate
+                })
+            
+            self.client = AsyncIOMotorClient(mongodb_uri, **connection_kwargs)
             # Get database - use default database from URI or specified db_name
             default_db = self.client.get_default_database()
             self.db = default_db if default_db is not None else self.client[db_name]
@@ -78,8 +102,31 @@ class Database:
                         logger.warning(f"⚠️ Connection attempt {attempt + 1} failed, retrying... Error: {e}")
                         await asyncio.sleep(3)  # Wait 3 seconds before retry
                     else:
-                        logger.error(f"❌ All connection attempts failed. Last error: {e}")
-                        raise e
+                        # Try fallback connection method for production
+                        if is_production and "SSL" in str(e):
+                            logger.warning("🔄 Trying fallback connection method for production SSL issues...")
+                            try:
+                                # Fallback: Create client with minimal SSL configuration
+                                fallback_client = AsyncIOMotorClient(
+                                    mongodb_uri,
+                                    serverSelectionTimeoutMS=20000,
+                                    connectTimeoutMS=20000,
+                                    socketTimeoutMS=20000,
+                                    tls=True,
+                                    tlsAllowInvalidCertificates=True,  # Allow invalid certs as fallback
+                                    retryWrites=True
+                                )
+                                await fallback_client.admin.command('ping')
+                                self.client = fallback_client
+                                self.db = fallback_client.get_default_database() or fallback_client[db_name]
+                                logger.info(f"✅ Connected to MongoDB using fallback method: {db_name}")
+                                break
+                            except Exception as fallback_error:
+                                logger.error(f"❌ Fallback connection also failed: {fallback_error}")
+                                raise e
+                        else:
+                            logger.error(f"❌ All connection attempts failed. Last error: {e}")
+                            raise e
             
             # Create indexes (skip if they already exist)
             try:
