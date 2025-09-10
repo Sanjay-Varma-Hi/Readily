@@ -223,6 +223,17 @@ const LoadingMessage = styled.div`
   font-size: 1.1rem;
 `;
 
+const ErrorMessage = styled.div`
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+  font-size: 0.9rem;
+  text-align: center;
+`;
+
 const EmptyState = styled.div`
   text-align: center;
   color: #6b7280;
