@@ -87,11 +87,6 @@ async def database_health_check():
         from core.database import get_database
         db = await get_database()
         
-        # Check if we got a MockDatabase (connection failed)
-        if hasattr(db, 'error_message'):
-            logger.error(f"Database connection failed: {db.error_message}")
-            raise HTTPException(status_code=500, detail=f"Database connection failed: {db.error_message}")
-        
         # Test both client and database
         await db.client.admin.command("ping")
         await db.db.command("ping")
@@ -100,38 +95,6 @@ async def database_health_check():
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/debug/env")
-async def debug_environment():
-    """Debug environment variables (without exposing sensitive data)"""
-    try:
-        import os
-        env_vars = {
-            "MONGODB_URI": "***" if os.getenv("MONGODB_URI") else "Not set",
-            "DB_NAME": os.getenv("DB_NAME", "Not set"),
-            "RENDER": os.getenv("RENDER", "Not set"),
-            "PORT": os.getenv("PORT", "Not set"),
-            "NODE_ENV": os.getenv("NODE_ENV", "Not set"),
-        }
-        
-        # Check MongoDB URI format
-        mongodb_uri = os.getenv("MONGODB_URI")
-        if mongodb_uri:
-            uri_parts = mongodb_uri.split('@')
-            if len(uri_parts) > 1:
-                host_part = uri_parts[1].split('/')[0]
-                env_vars["MONGODB_HOST"] = host_part
-            else:
-                env_vars["MONGODB_URI_FORMAT"] = "Invalid format"
-        
-        return {
-            "environment": env_vars,
-            "python_version": os.sys.version,
-            "platform": os.name
-        }
-    except Exception as e:
-        logger.error(f"Debug environment failed: {e}")
-        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

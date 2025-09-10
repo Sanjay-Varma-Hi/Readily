@@ -473,32 +473,26 @@ async def delete_policy(
             os.remove(doc["path"])
 
         # Delete associated chunks and embeddings
-        try:
-            chunk_ids = []
-            async for chunk in db.chunks.find({"doc_id": actual_doc_id}):
-                chunk_ids.append(chunk["_id"])
+        chunk_ids = []
+        async for chunk in db.chunks.find({"doc_id": actual_doc_id}):
+            chunk_ids.append(chunk["_id"])
 
-            if chunk_ids:
-                await db.embeddings.delete_many({"chunk_id": {"$in": chunk_ids}})
-                await db.chunks.delete_many({"doc_id": actual_doc_id})
-        except Exception as e:
-            logger.warning(f"Could not delete associated chunks and embeddings: {e}")
+        if chunk_ids:
+            await db.embeddings.delete_many({"chunk_id": {"$in": chunk_ids}})
+            await db.chunks.delete_many({"doc_id": actual_doc_id})
 
         # Remove document from folder's documents array (try both string and ObjectId formats)
-        try:
+        await db.policy_folders.update_many(
+            {"documents": actual_doc_id},
+            {"$pull": {"documents": actual_doc_id}}
+        )
+        
+        # Also try with the original doc_id parameter in case it's different
+        if actual_doc_id != doc_id:
             await db.policy_folders.update_many(
-                {"documents": actual_doc_id},
-                {"$pull": {"documents": actual_doc_id}}
+                {"documents": doc_id},
+                {"$pull": {"documents": doc_id}}
             )
-            
-            # Also try with the original doc_id parameter in case it's different
-            if actual_doc_id != doc_id:
-                await db.policy_folders.update_many(
-                    {"documents": doc_id},
-                    {"$pull": {"documents": doc_id}}
-                )
-        except Exception as e:
-            logger.warning(f"Could not update policy folders: {e}")
 
         # Delete document using the actual document ID
         await db.documents.delete_one({"_id": doc["_id"]})
