@@ -40,36 +40,14 @@ class Database:
             logger.info(f"📊 Database: {db_name}")
             logger.info(f"🌍 Environment: {'Production' if is_production else 'Development'}")
             
-            # Create fresh client every time with Python 3.13 compatible parameters
-            # Use explicit SSL settings for Python 3.13 compatibility
-            client_kwargs = {
-                "serverSelectionTimeoutMS": 20000 if is_production else 15000,
-                "connectTimeoutMS": 20000 if is_production else 15000,
-                "socketTimeoutMS": 20000 if is_production else 15000,
-                "retryWrites": True,
-                "retryReads": True,
-                "maxPoolSize": 20 if is_production else 10,
-                "minPoolSize": 2 if is_production else 1,
-                "maxIdleTimeMS": 30000,
-                "waitQueueTimeoutMS": 10000 if is_production else 5000,
-                "heartbeatFrequencyMS": 10000
-            }
-            
-            # Python 3.13 specific SSL configuration
-            if is_production:
-                # For Python 3.13, use explicit SSL settings that work with MongoDB Atlas
-                client_kwargs.update({
-                    "tls": True,
-                    "tlsAllowInvalidCertificates": False,
-                    "tlsInsecure": False,
-                    "ssl": True,
-                    "ssl_cert_reqs": "CERT_REQUIRED",
-                    "ssl_ca_certs": None,  # Use system CA certificates
-                    "ssl_match_hostname": True
-                })
-            
-            self.client = AsyncIOMotorClient(mongodb_uri, **client_kwargs)
-            self.db = self.client[db_name]
+            # Create fresh client with proper Atlas SRV URI format
+            # No deprecated SSL options - let Atlas SRV handle SSL automatically
+            self.client = AsyncIOMotorClient(
+                mongodb_uri,
+                serverSelectionTimeoutMS=5000
+            )
+            # Get database - use default database from URI or specified db_name
+            self.db = self.client.get_default_database() or self.client[db_name]
             
             # Test connection with retry logic
             max_retries = 3

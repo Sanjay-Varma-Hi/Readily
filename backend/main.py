@@ -82,28 +82,20 @@ async def head_health():
 
 @app.get("/health/db")
 async def database_health_check():
-    """Check database connection"""
+    """Check database connection - returns 500 if DB ping fails"""
     try:
         from core.database import Database
         db = Database()
         await db.connect()
         
         # Test a simple query
-        result = await db.db.command("ping")
+        await db.client.admin.command("ping")
         await db.disconnect()
         
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "ping": result
-        }
+        return {"ok": True}
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "database": "disconnected",
-            "error": str(e)
-        }
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
