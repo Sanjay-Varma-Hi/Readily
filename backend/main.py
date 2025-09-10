@@ -13,6 +13,8 @@ from api import policies, questionnaires, answers, summaries, chunking, audit_an
 # Try to load from local env file first, then fall back to system env vars
 if os.path.exists("../env/example.env"):
     load_dotenv("../env/example.env")
+elif os.path.exists("../env/production.env"):
+    load_dotenv("../env/production.env")
 else:
     # In production (Render), environment variables are set directly
     pass
@@ -60,12 +62,23 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """Basic health check endpoint"""
+    return {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
+
+@app.get("/healthz")
+async def healthz():
+    """Kubernetes-style health check endpoint for Render"""
+    return {"status": "ok"}
 
 @app.head("/")
 async def head_root():
     """Handle HEAD requests for health checks"""
     return {"message": "OK"}
+
+@app.head("/health")
+async def head_health():
+    """Handle HEAD requests to health endpoint"""
+    return {"status": "healthy"}
 
 @app.get("/health/db")
 async def database_health_check():

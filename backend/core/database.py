@@ -25,9 +25,12 @@ class Database:
     async def connect(self):
         """Connect to MongoDB - NO CACHING, FRESH CONNECTION EVERY TIME"""
         try:
-            # Get MongoDB URI from environment variables
+            # Get MongoDB URI from environment variables with environment-specific fallback
             mongodb_uri = os.getenv("MONGODB_URI")
             db_name = os.getenv("DB_NAME", "policiesdb")
+            
+            # Check if we're in production (Render) and use production-specific settings
+            is_production = os.getenv("RENDER", "false").lower() == "true"
             
             if not mongodb_uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
@@ -35,22 +38,30 @@ class Database:
             # Log connection attempt (without exposing credentials)
             logger.info(f"🔗 Connecting to MongoDB...")
             logger.info(f"📊 Database: {db_name}")
+            logger.info(f"🌍 Environment: {'Production' if is_production else 'Development'}")
             
-            # Create fresh client every time with exact same parameters
-            # Let connection string handle SSL configuration
-            self.client = AsyncIOMotorClient(
-                mongodb_uri,
-                serverSelectionTimeoutMS=15000,  # Increased timeout for Render
-                connectTimeoutMS=15000,  # Increased timeout for Render
-                socketTimeoutMS=15000,  # Added socket timeout
-                retryWrites=True,
-                retryReads=True,
-                maxPoolSize=10,  # Connection pool size
-                minPoolSize=1,   # Minimum connections
-                maxIdleTimeMS=30000,  # Close idle connections after 30s
-                waitQueueTimeoutMS=5000,  # Wait for connection from pool
-                heartbeatFrequencyMS=10000  # Heartbeat frequency
-            )
+            # Create fresh client every time with environment-specific parameters
+            # Let connection string handle SSL configuration for better compatibility
+            client_kwargs = {
+                "serverSelectionTimeoutMS": 20000 if is_production else 15000,
+                "connectTimeoutMS": 20000 if is_production else 15000,
+                "socketTimeoutMS": 20000 if is_production else 15000,
+                "retryWrites": True,
+                "retryReads": True,
+                "maxPoolSize": 20 if is_production else 10,
+                "minPoolSize": 2 if is_production else 1,
+                "maxIdleTimeMS": 30000,
+                "waitQueueTimeoutMS": 10000 if is_production else 5000,
+                "heartbeatFrequencyMS": 10000
+            }
+            
+            # Add production-specific SSL settings if needed
+            if is_production:
+                # For production, let the connection string handle SSL completely
+                # No additional SSL parameters to avoid conflicts
+                pass
+            
+            self.client = AsyncIOMotorClient(mongodb_uri, **client_kwargs)
             self.db = self.client[db_name]
             
             # Test connection with retry logic
