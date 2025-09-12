@@ -12,6 +12,13 @@ from core.database import get_database
 from core.audit_questions import get_audit_question, migrate_questions_to_audit_collection
 import logging
 
+# Import here to avoid circular import issues
+try:
+    from api.questionnaires import update_question_status_across_all_questionnaires
+except ImportError:
+    # Fallback if import fails
+    update_question_status_across_all_questionnaires = None
+
 logger = logging.getLogger(__name__)
 
 # Global variable to track used chunks for rotation
@@ -139,9 +146,11 @@ async def answer_audit_question(
             print(f"🚀 RETURNING EXISTING ANSWER FOR QUESTION {question_id}")
             logger.info(f"⚠️ Answer already exists for question {question_id}, returning existing answer")
             try:
-                from api.questionnaires import update_question_status_across_all_questionnaires
-                updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
-                logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires (returned existing answer)")
+                if update_question_status_across_all_questionnaires:
+                    updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)                                                                                                        
+                    logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires (returned existing answer)")                                                                            
+                else:
+                    logger.warning(f"⚠️ update_question_status_across_all_questionnaires not available, skipping status update")
                 
                 # Return the existing answer instead of generating a new one
                 return {
@@ -624,9 +633,11 @@ async def answer_audit_question(
         
         # Mark question as answered across all questionnaires
         try:
-            from api.questionnaires import update_question_status_across_all_questionnaires
-            updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
-            logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires")
+            if update_question_status_across_all_questionnaires:
+                updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
+                logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires")
+            else:
+                logger.warning(f"⚠️ update_question_status_across_all_questionnaires not available, skipping status update")
         except Exception as e:
             logger.error(f"❌ Error marking question as answered: {e}")
         
