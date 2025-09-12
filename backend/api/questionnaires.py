@@ -205,6 +205,26 @@ async def delete_questionnaire(
         logger.error(f"Error deleting questionnaire: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+async def find_existing_question(text_hash: str, db) -> dict:
+    """Find existing question with the same text hash"""
+    try:
+        # Search for questions with the same hash across all questionnaires
+        cursor = db.questionnaires.find(
+            {"questions.hash": text_hash},
+            {"questions.$": 1, "filename": 1}
+        )
+        
+        async for doc in cursor:
+            if "questions" in doc and doc["questions"]:
+                for question in doc["questions"]:
+                    if question.get("hash") == text_hash:
+                        logger.info(f"Found existing question with hash {text_hash} in {doc.get('filename', 'unknown')}")
+                        return question
+        return None
+    except Exception as e:
+        logger.error(f"Error finding existing question: {e}")
+        return None
+
 async def process_questionnaire(questionnaire_id: str, file_path: str, db):
     """Process questionnaire in background to extract questions"""
     try:
@@ -217,11 +237,22 @@ async def process_questionnaire(questionnaire_id: str, file_path: str, db):
             logger.info(f"Using enhanced audit extraction for {len(audit_questions)} questions")
             for audit_q in audit_questions:
                 qid = f"Q{audit_q['question_id']}"
-                # Generate unique question ID combining questionnaire ID and question number
-                unique_question_id = f"{questionnaire_id}_{audit_q['question_id']}"
                 normalized = normalize_question(audit_q['requirement'])
                 tags = extract_tags_from_question(audit_q['requirement'])
                 text_hash = generate_text_hash(audit_q['requirement'])
+                
+                # Check if this question already exists
+                existing_question = await find_existing_question(text_hash, db)
+                
+                if existing_question:
+                    # Reuse existing question ID and answer status
+                    unique_question_id = existing_question['question_id']
+                    answered = existing_question.get('answered', False)
+                    logger.info(f"Reusing existing question ID {unique_question_id} for duplicate question")
+                else:
+                    # Generate new unique question ID
+                    unique_question_id = f"{questionnaire_id}_{audit_q['question_id']}"
+                    answered = False
                 
                 question = Question(
                     qid=qid,
@@ -234,7 +265,7 @@ async def process_questionnaire(questionnaire_id: str, file_path: str, db):
                 question_dict = question.dict()
                 # Add unique question ID and answered status
                 question_dict['question_id'] = unique_question_id
-                question_dict['answered'] = False
+                question_dict['answered'] = answered
                 questions.append(question_dict)
         else:
             # Fallback to original extraction
@@ -243,11 +274,22 @@ async def process_questionnaire(questionnaire_id: str, file_path: str, db):
             
             for i, question_text in enumerate(questions_text, 1):
                 qid = f"Q{i}"
-                # Generate unique question ID combining questionnaire ID and question number
-                unique_question_id = f"{questionnaire_id}_{i}"
                 normalized = normalize_question(question_text)
                 tags = extract_tags_from_question(question_text)
                 text_hash = generate_text_hash(question_text)
+                
+                # Check if this question already exists
+                existing_question = await find_existing_question(text_hash, db)
+                
+                if existing_question:
+                    # Reuse existing question ID and answer status
+                    unique_question_id = existing_question['question_id']
+                    answered = existing_question.get('answered', False)
+                    logger.info(f"Reusing existing question ID {unique_question_id} for duplicate question")
+                else:
+                    # Generate new unique question ID
+                    unique_question_id = f"{questionnaire_id}_{i}"
+                    answered = False
                 
                 question = Question(
                     qid=qid,
@@ -260,7 +302,7 @@ async def process_questionnaire(questionnaire_id: str, file_path: str, db):
                 question_dict = question.dict()
                 # Add unique question ID and answered status
                 question_dict['question_id'] = unique_question_id
-                question_dict['answered'] = False
+                question_dict['answered'] = answered
                 questions.append(question_dict)
         
         # Update questionnaire with extracted questions
@@ -283,3 +325,81 @@ async def process_questionnaire(questionnaire_id: str, file_path: str, db):
             {"_id": ObjectId(questionnaire_id)},
             {"$set": {"status": DocumentStatus.ERROR}}
         )
+
+async def update_question_status_across_all_questionnaires(question_id: str, answered: bool, db):
+    """Update the answered status of a question across all questionnaires"""
+    try:
+        # Update all questionnaires that contain this question
+        result = await db.questionnaires.update_many(
+            {"questions.question_id": question_id},
+            {"$set": {"questions.$.answered": answered}}
+        )
+        logger.info(f"Updated question {question_id} status to {answered} in {result.modified_count} questionnaires")
+        return result.modified_count
+    except Exception as e:
+        logger.error(f"Error updating question status across questionnaires: {e}")
+        return 0
+
+@router.post("/questionnaires/questions/{question_id}/mark-answered")
+async def mark_question_answered(
+    question_id: str,
+    db = Depends(get_database)
+):
+    """Mark a question as answered across all questionnaires"""
+    try:
+        # Update the question status across all questionnaires
+        updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
+        
+        return {
+            "message": f"Question {question_id} marked as answered",
+            "question_id": question_id,
+            "updated_questionnaires": updated_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error marking question as answered: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to mark question as answered: {str(e)}")
+
+@router.get("/questionnaires/questions/statistics")
+async def get_question_statistics(
+    db = Depends(get_database)
+):
+    """Get statistics about questions across all questionnaires"""
+    try:
+        # Get all questionnaires
+        cursor = db.questionnaires.find({}, {"questions": 1, "filename": 1})
+        
+        total_questions = 0
+        answered_questions = 0
+        unique_questions = set()
+        questionnaire_stats = []
+        
+        async for doc in cursor:
+            questions = doc.get("questions", [])
+            doc_answered = sum(1 for q in questions if q.get("answered", False))
+            
+            questionnaire_stats.append({
+                "filename": doc.get("filename"),
+                "total_questions": len(questions),
+                "answered_questions": doc_answered,
+                "completion_percentage": (doc_answered / len(questions) * 100) if questions else 0
+            })
+            
+            total_questions += len(questions)
+            answered_questions += doc_answered
+            
+            # Track unique questions by hash
+            for q in questions:
+                unique_questions.add(q.get("hash", ""))
+        
+        return {
+            "total_questions": total_questions,
+            "answered_questions": answered_questions,
+            "unique_questions": len(unique_questions),
+            "overall_completion_percentage": (answered_questions / total_questions * 100) if total_questions else 0,
+            "questionnaire_statistics": questionnaire_stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting question statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve question statistics: {str(e)}")

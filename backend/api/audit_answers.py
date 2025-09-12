@@ -125,6 +125,43 @@ async def answer_audit_question(
         
         logger.info(f"🔍 Answering audit question: {question_text[:100]}...")
         
+        # Check if answer already exists - if it does, return the existing answer immediately
+        existing_answer = await db.answers.find_one({"question_id": question_id})
+        print(f"🔍 CHECKING FOR EXISTING ANSWER:")
+        print(f"  - Question ID: {question_id}")
+        print(f"  - Existing answer found: {existing_answer is not None}")
+        if existing_answer:
+            print(f"  - Existing answer: {existing_answer.get('answer', 'NO')}")
+            print(f"  - Existing confidence: {existing_answer.get('confidence', 0.0)}")
+            print(f"  - Existing reasoning: {existing_answer.get('reasoning', '')[:100]}...")
+        
+        if existing_answer:
+            print(f"🚀 RETURNING EXISTING ANSWER FOR QUESTION {question_id}")
+            logger.info(f"⚠️ Answer already exists for question {question_id}, returning existing answer")
+            try:
+                from api.questionnaires import update_question_status_across_all_questionnaires
+                updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
+                logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires (returned existing answer)")
+                
+                # Return the existing answer instead of generating a new one
+                return {
+                    "success": True,
+                    "answer": {
+                        "answer": existing_answer.get("answer", "NO"),
+                        "confidence": existing_answer.get("confidence", 0.0),
+                        "evidence": existing_answer.get("evidence", {}),
+                        "reasoning": existing_answer.get("reasoning", ""),
+                        "source": existing_answer.get("source", {}),
+                        "page_number": existing_answer.get("page_number", 1),
+                        "quote": existing_answer.get("quote", ""),
+                        "from_cache": True  # Indicate this is from cache/existing answer
+                    }
+                }
+            except Exception as e:
+                logger.error(f"❌ Error marking question as answered: {e}")
+        else:
+            print(f"🚀 NO EXISTING ANSWER FOUND, GENERATING NEW ANSWER FOR QUESTION {question_id}")
+        
         # Step 1: Parse the reference to get document name and page
         reference = request.question_id  # We'll get this from the question object
         print(f"🔍 Question: {question_text}")
@@ -388,13 +425,102 @@ async def answer_audit_question(
             print(f"  - Domain-specific terms: {domain_specific_terms}")
             print(f"  - Domain-specific relevance: {domain_specific_relevance:.2f}")
             
-            # More reasonable criteria - require some domain-specific content but not overly strict
-            if relevance_score > 0.3 and specific_relevance > 0.2 and domain_specific_relevance > 0.2 and (has_policy_content or has_requirements):
-                answer = "YES"
-                confidence = min(0.9, 0.6 + (relevance_score * 0.2) + (specific_relevance * 0.1))
-                reasoning = f"Found policy content specifically addressing the question. Document '{best_doc.get('title', 'Unknown') if best_doc else 'Unknown'}' contains relevant policy statements with {question_terms_in_text} matching terms and {specific_terms_found} question-specific terms."
+            # Check for specific question content that would indicate a clear YES answer
+            # Look for exact phrases or very specific content that directly answers the question
+            question_phrases = []
+            if 'hospice' in question_lower:
+                question_phrases = ['hospice care', 'hospice services', 'terminal illness', 'palliative care']
+            elif 'transplant' in question_lower:
+                question_phrases = ['transplant services', 'bone marrow transplant', 'organ transplant']
+            elif 'medical review' in question_lower:
+                question_phrases = ['medical review', 'utilization review', 'prepayment review']
+            else:
+                # For general questions, look for very specific policy language
+                question_phrases = ['policy states', 'contract requires', 'state law requires', 'shall provide', 'must provide']
+            
+            # Check if any of these specific phrases appear in the text
+            specific_phrases_found = sum(1 for phrase in question_phrases if phrase in text)
+            phrase_relevance = specific_phrases_found / len(question_phrases) if question_phrases else 0
+            
+            print(f"🔍 PHRASE ANALYSIS:")
+            print(f"  - Question phrases: {question_phrases}")
+            print(f"  - Specific phrases found: {specific_phrases_found}/{len(question_phrases)}")
+            print(f"  - Phrase relevance: {phrase_relevance:.2f}")
+            
+            # Ultra-conservative approach - default to NO unless there's extremely clear evidence
+            # Look for explicit policy statements that directly answer the question
+            question_lower = question_text.lower()
+            
+            # Extract the core question without common words
+            core_question = question_lower.replace('does the p&p state that', '').replace('does the policy state that', '').replace('does the policy state', '').replace('does the p&p state', '').strip()
+            
+            print(f"🔍 ULTRA-CONSERVATIVE ANALYSIS:")
+            print(f"  - Core question: {core_question}")
+            print(f"  - Text sample: {text[:200]}...")
+            
+            # Look for very specific policy language that directly addresses the question
+            # Only answer YES if the policy explicitly states something about the specific topic
+            if 'hospice' in core_question:
+                # Look for explicit hospice policy statements
+                hospice_policy_found = ('hospice' in text and 
+                                      ('policy' in text or 'shall' in text or 'must' in text) and
+                                      ('hospice care' in text or 'hospice services' in text or 'terminal illness' in text))
+                if hospice_policy_found:
+                    answer = "YES"
+                    confidence = 0.9
+                    reasoning = f"Found explicit hospice policy content. Document '{best_doc.get('title', 'Unknown') if best_doc else 'Unknown'}' contains clear policy statements about hospice care."
+                else:
+                    answer = "NO"
+                    confidence = 0.8
+                    reasoning = f"No explicit hospice policy content found that directly addresses the question."
+            elif 'transplant' in core_question:
+                # Look for explicit transplant policy statements
+                transplant_policy_found = ('transplant' in text and 
+                                         ('policy' in text or 'shall' in text or 'must' in text) and
+                                         ('transplant services' in text or 'bone marrow' in text or 'organ transplant' in text))
+                if transplant_policy_found:
+                    answer = "YES"
+                    confidence = 0.9
+                    reasoning = f"Found explicit transplant policy content. Document '{best_doc.get('title', 'Unknown') if best_doc else 'Unknown'}' contains clear policy statements about transplant services."
+                else:
+                    answer = "NO"
+                    confidence = 0.8
+                    reasoning = f"No explicit transplant policy content found that directly addresses the question."
+            elif 'medical review' in core_question:
+                # Look for explicit medical review policy statements
+                review_policy_found = (('medical review' in text or 'utilization review' in text) and 
+                                     ('policy' in text or 'shall' in text or 'must' in text))
+                if review_policy_found:
+                    answer = "YES"
+                    confidence = 0.9
+                    reasoning = f"Found explicit medical review policy content. Document '{best_doc.get('title', 'Unknown') if best_doc else 'Unknown'}' contains clear policy statements about medical review."
+                else:
+                    answer = "NO"
+                    confidence = 0.8
+                    reasoning = f"No explicit medical review policy content found that directly addresses the question."
+            else:
+                # For all other questions, be extremely conservative
+                # Only answer YES if there's very specific policy language
+                specific_policy_found = (any(phrase in text for phrase in ['policy states', 'contract requires', 'state law requires']) and
+                                       core_question.split()[0] in text and
+                                       ('shall' in text or 'must' in text))
                 
-                # Extract a more relevant quote that actually answers the question
+                if specific_policy_found:
+                    answer = "YES"
+                    confidence = 0.9
+                    reasoning = f"Found explicit policy content addressing the question. Document '{best_doc.get('title', 'Unknown') if best_doc else 'Unknown'}' contains clear policy statements about the topic."
+                else:
+                    answer = "NO"
+                    confidence = 0.8
+                    reasoning = f"No explicit policy content found that directly addresses the question. The policy documents contain general information but do not specifically address the question asked."
+            
+            # Set default values for NO answers
+            if answer == "NO":
+                quote = "No specific policy requirements found that address the question asked."
+                actual_page = best_chunk.get('page_from', 1) if best_chunk else 1
+                
+            # Extract a more relevant quote that actually answers the question
+            if answer in ["YES", "PARTIALLY"]:
                 full_text = best_chunk.get('text', '')
                 actual_page = best_chunk.get('page_from', 1)
                 
@@ -457,12 +583,6 @@ async def answer_audit_question(
                     print(f"🔍 Extracted page number from quote: {actual_page}")
                 else:
                     print(f"🔍 No page number found in quote, using chunk metadata: {actual_page}")
-            else:
-                answer = "NO"
-                confidence = 0.7
-                reasoning = f"No specific policy content found that directly addresses the question. Found {question_terms_in_text} general matching terms but only {specific_terms_found} question-specific terms (need at least 2 for YES answer)."
-                quote = "No specific policy requirements found that address the question asked."
-                actual_page = best_chunk.get('page_from', 1) if best_chunk else 1
             
         else:
             answer = "NO"
@@ -498,12 +618,17 @@ async def answer_audit_question(
             "updated_at": datetime.utcnow()
         }
         
-        # Save to database (upsert to handle duplicates)
-        await db.answers.replace_one(
-            {"question_id": question_id},
-            answer_data,
-            upsert=True
-        )
+        # Save new answer to database
+        await db.answers.insert_one(answer_data)
+        logger.info(f"💾 New answer saved to database for question {question_id}")
+        
+        # Mark question as answered across all questionnaires
+        try:
+            from api.questionnaires import update_question_status_across_all_questionnaires
+            updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
+            logger.info(f"✅ Marked question {question_id} as answered in {updated_count} questionnaires")
+        except Exception as e:
+            logger.error(f"❌ Error marking question as answered: {e}")
         
         print(f"💾 Answer saved to database for question {question_id}")
 
@@ -638,4 +763,34 @@ async def migrate_questionnaire_questions(
         
     except Exception as e:
         logger.error(f"❌ Error migrating questions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/audit-answers/{question_id}/status")
+async def get_answer_status(
+    question_id: str,
+    db = Depends(get_database)
+):
+    """Check if a question is already answered and get basic answer info"""
+    try:
+        # Get the answer
+        answer = await db.answers.find_one({"question_id": question_id})
+        
+        if not answer:
+            return {
+                "question_id": question_id,
+                "is_answered": False,
+                "message": "Question not yet answered"
+            }
+        
+        return {
+            "question_id": question_id,
+            "is_answered": True,
+            "answer": answer.get("answer", ""),
+            "confidence": answer.get("confidence", 0),
+            "created_at": answer.get("created_at"),
+            "message": "Question already answered - existing answer preserved"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error checking answer status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
