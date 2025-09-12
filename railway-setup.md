@@ -63,3 +63,4 @@ If you have issues:
 2. Deploy your backend
 3. Update your frontend CORS to use the new Railway URL
 4. Enjoy stress-free hosting! 🎉
+

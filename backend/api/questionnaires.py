@@ -70,7 +70,7 @@ async def upload_questionnaire(
         logger.error(f"Error uploading questionnaire: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/questionnaires", response_model=List[dict])
+@router.get("/questionnaires")
 async def list_questionnaires(
     db = Depends(get_database)
 ):
@@ -82,8 +82,19 @@ async def list_questionnaires(
         cursor = db.questionnaires.find().sort("uploaded_at", -1)
         questionnaires = []
         async for q in cursor:
-            q["_id"] = str(q["_id"])
-            questionnaires.append(q)
+            # Convert all ObjectId fields to strings
+            def convert_objectids(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_objectids(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_objectids(item) for item in obj]
+                elif hasattr(obj, '__class__') and obj.__class__.__name__ == 'ObjectId':
+                    return str(obj)
+                else:
+                    return obj
+            
+            q_converted = convert_objectids(q)
+            questionnaires.append(q_converted)
 
         logger.info(f"✅ Successfully retrieved {len(questionnaires)} questionnaires")
         return questionnaires
