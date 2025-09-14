@@ -154,11 +154,21 @@ export const deleteAnswers = async (questionnaireId) => {
 };
 
 // Audit Answer API functions
-export const answerAuditQuestion = async (question, questionId = null) => {
+export const answerAuditQuestion = async (questionId) => {
+  const response = await api.post(`/api/audit-answers/deepseek/${questionId}`);
+  return response.data;
+};
+
+export const answerAuditQuestionLegacy = async (question, questionId = null) => {
   const response = await api.post('/api/audit-answers/single', {
     question: question,
     question_id: questionId
   });
+  return response.data;
+};
+
+export const findEvidenceForQuestion = async (questionId) => {
+  const response = await api.post(`/api/audit-answers/find-evidence/${questionId}`);
   return response.data;
 };
 

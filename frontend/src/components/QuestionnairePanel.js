@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { getQuestionnaires, uploadQuestionnaire, getQuestionnaireQuestionsFormatted, answerAuditQuestion, getAuditAnswer, getAuditAnswers, getAnswerDetails } from '../services/api';
+import { getQuestionnaires, uploadQuestionnaire, getQuestionnaireQuestionsFormatted, answerAuditQuestion, findEvidenceForQuestion, getAuditAnswer, getAuditAnswers, getAnswerDetails } from '../services/api';
 
 const Container = styled.div`
   padding: 24px;
@@ -769,7 +769,7 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
       console.log('🔍 FETCHING QUESTION DETAILS:');
       console.log('Question ID:', questionId);
       console.log('Question Object:', question);
-      console.log('Question Text:', question.requirement);
+      console.log('Question Text:', question.text || question.requirement);
       console.log('Question Number:', question.question_number);
       console.log('Question Type:', question.question_type);
       console.log('All Question Properties:', Object.keys(question));
@@ -795,22 +795,60 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
         return;
       }
 
+      // Always make API call - the API will return cached answer if it exists
+
       // Set thinking state
       setAnsweringQuestions(prev => new Set([...prev, questionId]));
       setError(null);
 
-      console.log('🔍 Answering question:', question.requirement);
+      // Call both APIs in parallel
+      let result, evidenceResult;
+      try {
+        [result, evidenceResult] = await Promise.all([
+          answerAuditQuestion(questionId),
+          findEvidenceForQuestion(questionId)
+        ]);
+      } catch (error) {
+        // Try individual calls to see which one fails
+        try {
+          result = await answerAuditQuestion(questionId);
+        } catch (deepseekError) {
+          console.error('DeepSeek API failed:', deepseekError);
+        }
+        
+        try {
+          evidenceResult = await findEvidenceForQuestion(questionId);
+        } catch (evidenceError) {
+          console.error('Evidence API failed:', evidenceError);
+        }
+        
+        // Even if there's an error, try to store what we have
+        if (result && result.success && result.answer) {
+          const answerWithEvidence = {
+            ...result.answer,
+            evidence_data: evidenceResult?.evidence || null
+          };
+          
+          setQuestionAnswers(prev => ({
+            ...prev,
+            [questionId]: answerWithEvidence
+          }));
+        }
+        
+        throw error;
+      }
       
-      // Call the audit answer API
-      const result = await answerAuditQuestion(question.requirement, questionId);
-      
-      if (result.success && result.answer) {
-        // Store the answer
+      if (result && result.success && result.answer) {
+        // Store the answer with evidence data
+        const answerWithEvidence = {
+          ...result.answer,
+          evidence_data: evidenceResult?.evidence || null
+        };
+        
         setQuestionAnswers(prev => ({
           ...prev,
-          [questionId]: result.answer
+          [questionId]: answerWithEvidence
         }));
-        console.log('✅ Answer received:', result.answer);
         
         // If this was a new answer (not from cache), update the question's answered status
         if (!result.from_cache) {
@@ -921,20 +959,22 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
             <AnswerSection>
               <AnswerLabel>Evidence</AnswerLabel>
               <EvidenceText>
-                {answer.evidence ? 
-                  `${answer.evidence.filename} (Page ${answer.evidence.page || answer.page_number || 1})` : 
-                  'None found'
+                {answer.evidence_data ? 
+                  `${answer.evidence_data.most_relevant_document} (Page ${answer.evidence_data.page_number || 1})` : 
+                  answer.evidence ? 
+                    `${answer.evidence.filename} (Page ${answer.evidence.page || answer.page_number || 1})` : 
+                    'None found'
                 }
               </EvidenceText>
             </AnswerSection>
           )}
           
           
-          {answer.answer === 'YES' && (answer.quote || (answer.evidence && answer.evidence.quote)) && (
+          {answer.answer === 'YES' && (answer.key_evidence || (answer.evidence && answer.evidence.key_evidence)) && (
             <AnswerSection>
-              <AnswerLabel>Quote</AnswerLabel>
+              <AnswerLabel>Key Evidence</AnswerLabel>
               <QuoteText style={{ fontStyle: 'italic', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                "{answer.quote || answer.evidence.quote}"
+                "{answer.key_evidence || answer.evidence.key_evidence}"
               </QuoteText>
             </AnswerSection>
           )}
@@ -968,7 +1008,7 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
               questions.map((question, index) => (
                 <QuestionItem key={index}>
                   <QuestionHeader>
-                    <QuestionText>{question.requirement}</QuestionText>
+                    <QuestionText>{question.text || question.requirement}</QuestionText>
                   </QuestionHeader>
                   {question.reference ? (
                     <QuestionReference>
@@ -1133,7 +1173,7 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
                   <SourceInfo>
                     <SourceItem>
                       <SourceLabel>Document:</SourceLabel>
-                      <SourceValue>{detailedAnswer.source?.document_name || 'Unknown'} (Page {detailedAnswer.source?.page_number || detailedAnswer.evidence?.page || 1})</SourceValue>
+                      <SourceValue>{detailedAnswer.evidence_data?.most_relevant_document || detailedAnswer.source?.document_name || 'Unknown'} (Page {detailedAnswer.evidence_data?.page_number || detailedAnswer.source?.page_number || detailedAnswer.evidence?.page || 1})</SourceValue>
                     </SourceItem>
                     
                     <SourceItem>
@@ -1208,7 +1248,7 @@ function QuestionnairePanel({ selectedQuestionnaire, questions, onCloseQuestions
                 (questions || internalQuestions).map((question, index) => (
                   <QuestionItem key={index}>
                     <QuestionHeader>
-                      <QuestionText>{question.requirement}</QuestionText>
+                      <QuestionText>{question.text || question.requirement}</QuestionText>
                     </QuestionHeader>
                     {question.reference ? (
                       <QuestionReference>
