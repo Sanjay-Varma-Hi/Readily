@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-from api import policies, questionnaires, answers, summaries, chunking, audit_answers
+from api import policies, questionnaires, audit_answers
 
 # Load environment variables
 # Try to load from local env file first, then fall back to system env vars
@@ -44,9 +44,6 @@ app.add_middleware(
 # Include routers
 app.include_router(policies.router, prefix="/api", tags=["policies"])
 app.include_router(questionnaires.router, prefix="/api", tags=["questionnaires"])
-app.include_router(answers.router, prefix="/api", tags=["answers"])
-app.include_router(summaries.router, prefix="/api", tags=["summaries"])
-app.include_router(chunking.router, prefix="/api", tags=["chunking"])
 app.include_router(audit_answers.router, prefix="/api", tags=["audit-answers"])
 
 # Serve static files (only if directory exists)

@@ -103,40 +103,7 @@ async def list_questionnaires(
         logger.error(f"❌ Error listing questionnaires: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve questionnaires: {str(e)}")
 
-@router.get("/questionnaires/{questionnaire_id}", response_model=dict)
-async def get_questionnaire(
-    questionnaire_id: str,
-    db = Depends(get_database)
-):
-    """Get a specific questionnaire with its questions"""
-    try:
-        questionnaire = await db.questionnaires.find_one({"_id": ObjectId(questionnaire_id)})
-        if not questionnaire:
-            raise HTTPException(status_code=404, detail="Questionnaire not found")
 
-        questionnaire["_id"] = str(questionnaire["_id"])
-        return questionnaire
-
-    except Exception as e:
-        logger.error(f"Error getting questionnaire: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/questionnaires/{questionnaire_id}/questions", response_model=List[dict])
-async def get_questionnaire_questions(
-    questionnaire_id: str,
-    db = Depends(get_database)
-):
-    """Get questions from a specific questionnaire"""
-    try:
-        questionnaire = await db.questionnaires.find_one({"_id": ObjectId(questionnaire_id)})
-        if not questionnaire:
-            raise HTTPException(status_code=404, detail="Questionnaire not found")
-
-        return questionnaire.get("questions", [])
-
-    except Exception as e:
-        logger.error(f"Error getting questionnaire questions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/questionnaires/{questionnaire_id}/questions-formatted")
 async def get_questionnaire_questions_formatted(
@@ -176,34 +143,6 @@ async def get_questionnaire_questions_formatted(
         logger.error(f"Error getting formatted questionnaire questions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/questionnaires/{questionnaire_id}")
-async def delete_questionnaire(
-    questionnaire_id: str,
-    db = Depends(get_database)
-):
-    """Delete a questionnaire and all associated data"""
-    try:
-        # Get questionnaire details
-        questionnaire = await db.questionnaires.find_one({"_id": ObjectId(questionnaire_id)})
-        if not questionnaire:
-            raise HTTPException(status_code=404, detail="Questionnaire not found")
-
-        # Delete file from disk
-        file_path = f"uploads/questionnaires/{questionnaire['filename']}"
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-        # Delete associated answers
-        await db.answers.delete_many({"questionnaire_id": questionnaire_id})
-
-        # Delete questionnaire
-        await db.questionnaires.delete_one({"_id": ObjectId(questionnaire_id)})
-
-        return {"message": "Questionnaire deleted successfully"}
-
-    except Exception as e:
-        logger.error(f"Error deleting questionnaire: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 async def find_existing_question(text_hash: str, db) -> dict:
     """Find existing question with the same text hash"""
@@ -340,66 +279,4 @@ async def update_question_status_across_all_questionnaires(question_id: str, ans
         logger.error(f"Error updating question status across questionnaires: {e}")
         return 0
 
-@router.post("/questionnaires/questions/{question_id}/mark-answered")
-async def mark_question_answered(
-    question_id: str,
-    db = Depends(get_database)
-):
-    """Mark a question as answered across all questionnaires"""
-    try:
-        # Update the question status across all questionnaires
-        updated_count = await update_question_status_across_all_questionnaires(question_id, True, db)
-        
-        return {
-            "message": f"Question {question_id} marked as answered",
-            "question_id": question_id,
-            "updated_questionnaires": updated_count
-        }
-        
-    except Exception as e:
-        logger.error(f"Error marking question as answered: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to mark question as answered: {str(e)}")
 
-@router.get("/questionnaires/questions/statistics")
-async def get_question_statistics(
-    db = Depends(get_database)
-):
-    """Get statistics about questions across all questionnaires"""
-    try:
-        # Get all questionnaires
-        cursor = db.questionnaires.find({}, {"questions": 1, "filename": 1})
-        
-        total_questions = 0
-        answered_questions = 0
-        unique_questions = set()
-        questionnaire_stats = []
-        
-        async for doc in cursor:
-            questions = doc.get("questions", [])
-            doc_answered = sum(1 for q in questions if q.get("answered", False))
-            
-            questionnaire_stats.append({
-                "filename": doc.get("filename"),
-                "total_questions": len(questions),
-                "answered_questions": doc_answered,
-                "completion_percentage": (doc_answered / len(questions) * 100) if questions else 0
-            })
-            
-            total_questions += len(questions)
-            answered_questions += doc_answered
-            
-            # Track unique questions by hash
-            for q in questions:
-                unique_questions.add(q.get("hash", ""))
-        
-        return {
-            "total_questions": total_questions,
-            "answered_questions": answered_questions,
-            "unique_questions": len(unique_questions),
-            "overall_completion_percentage": (answered_questions / total_questions * 100) if total_questions else 0,
-            "questionnaire_statistics": questionnaire_stats
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting question statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve question statistics: {str(e)}")

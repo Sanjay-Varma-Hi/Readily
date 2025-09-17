@@ -12,8 +12,7 @@ import re
 from .schema import Document, Chunk, DocumentStatus, PolicyType, DocumentOverview
 # Removed old chunk_text import - using single chunk logic instead
 # Embeddings functionality removed
-from .summarization import summarize_chunks_batch, generate_document_overview
-from .enhanced_analysis import get_enhanced_analyzer
+# Summarization and enhanced analysis removed - not used by frontend
 
 logger = logging.getLogger(__name__)
 
